@@ -46,10 +46,6 @@ grammar Wulfenite::Grammar is HLL::Grammar {
             '{' ~ '}' <statementlist>
     } 
 
-    token statement:sym<say> {
-        <sym> <.ws> <EXPR> <semicolon>
-    }
-
     token statement:sym<block> { 
         <block>
     }
@@ -91,11 +87,13 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     token infix:sym«<»    { <sym>  <O('%relational, :op<islt_n>')> }
     token infix:sym«>»    { <sym>  <O('%relational, :op<isgt_n>')> }
 
+    token circumfix:sym<( )> { :s '(' ~ ')' <EXPR> }
+
     # Simple values
     token term:sym<value>    { <value> }
     token term:sym<variable> { <varname> }
 
-    token term:sym<call>     { <ident> '(' ~ ')' [ <EXPR>* % ',' ] }
+    token term:sym<call>     { :s <ident> [ '(' ~ ')' [ <EXPR>* % ',' ] ] }
 
     proto token value {*}
     token value:sym<string> { <?["]> <quote_EXPR: ':q', ':b'> }
@@ -169,18 +167,34 @@ class Wulfenite::Actions is HLL::Actions {
     }
 
     method term:sym<call>($/) {
-        my $call := QAST::Op.new( :op('call'), :name(~$<ident>) );
-        for $<EXPR> {
-            $call.push($_.ast);
-        }
-        make $call;
-    }
+        my $name := ~$<ident>;
 
-    method statement:sym<say>($/) {
-        make QAST::Op.new(
-            :op('say'),
-            $<EXPR>.ast
+        my %builtins := nqp::hash(
+            'say',   'concat',
+            'print', 'concat',
+            'die',   'single',
+            'exit',  'single',
+            'sleep', 'single',
         );
+
+        my $call;
+        if %builtins{$name} eq 'concat' {
+            my $val := $<EXPR>.shift().ast;
+            for $<EXPR> {
+                $val := QAST::Op.new( :op('concat'), $val, $_.ast );
+            }
+            $call := QAST::Op.new( :op($name), $val );
+        } elsif %builtins{$name} eq 'single' {
+            my $val := $<EXPR>.shift().ast;
+            $call := QAST::Op.new( :op($name), $val );
+        } else {
+            $call := QAST::Op.new( :op('call'), :name($name) );
+            for $<EXPR> {
+                $call.push($_.ast);
+            }
+        }
+
+        make $call;
     }
 
     method statement:sym<if>($/) {
@@ -215,6 +229,8 @@ class Wulfenite::Actions is HLL::Actions {
     method value:sym<float>($/) {
         make QAST::NVal.new( :value(+$/.Str) )
     }
+
+    method circumfix:sym<( )>($/) { make $<EXPR>.ast }
 }
 
 class Wulfenite::Compiler is HLL::Compiler {
