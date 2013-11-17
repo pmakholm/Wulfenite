@@ -5,6 +5,8 @@ use NQPHLL;
 grammar Wulfenite::Grammar is HLL::Grammar {
     token TOP {
         :my $*CUR_BLOCK := QAST::Block.new(QAST::Stmts.new());
+        :my $*IN_SUB    := 0;
+
         <statementlist>
         [ $ || <.panic('Syntax error')> ]
     }
@@ -40,6 +42,7 @@ grammar Wulfenite::Grammar is HLL::Grammar {
 
     rule subbody {
         :my $*CUR_BLOCK   := QAST::Block.new(QAST::Stmts.new());
+        :my $*IN_SUB      := 1;
 
         <ident> <.ws> 
             '(' ~ ')' [ <.ws> <param>* % [ <.ws> ',' <.ws> ] <.ws> ] <.ws>
@@ -93,6 +96,7 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     token term:sym<value>    { <value> }
     token term:sym<variable> { <varname> }
 
+    token term:sym<return>   { :s <?{$*IN_SUB}> <sym> [ '(' ~ ')' [ <EXPR>? ] ] }
     token term:sym<call>     { :s <ident> [ '(' ~ ')' [ <EXPR>* % ',' ] ] }
 
     proto token value {*}
@@ -100,8 +104,9 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     token value:sym<integer> { '-'? \d+ }
 
     # Names et al
+    token keyword { [ if | my | return | sub | while ] <!ww> }
     token varname { '$' <[A..Za..z_]> <[A..Za..z0..9_]>* }
-    token ident   { <[A..Za..z_]> <[A..Za..z0..9_]>* }
+    token ident   { <!keyword> <[A..Za..z_]> <[A..Za..z0..9_]>* }
 }
 
 class Wulfenite::Actions is HLL::Actions {
@@ -154,7 +159,12 @@ class Wulfenite::Actions is HLL::Actions {
 
     method subbody($/) {
         $*CUR_BLOCK.name(~$<ident>);
-        $*CUR_BLOCK.push($<statementlist>.ast);
+        $*CUR_BLOCK.push(
+            QAST::Op.new(
+                :op('lexotic'), :name<RETURN>,
+                $<statementlist>.ast
+            )
+        );
         
         make $*CUR_BLOCK;
     }
@@ -164,6 +174,13 @@ class Wulfenite::Actions is HLL::Actions {
             :name(~$<varname>), :scope('lexical'), :decl('param')
         ));
         $*CUR_BLOCK.symbol(~$<varname>, :declared(1));
+    }
+
+    method term:sym<return>($/) {
+        make QAST::Op.new(
+            :op('call'), :name('RETURN'),
+            $<EXPR> ?? $<EXPR>.ast !! QAST::Op.new( :op('null') )
+        );
     }
 
     method term:sym<call>($/) {
