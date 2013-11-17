@@ -33,6 +33,19 @@ grammar Wulfenite::Grammar is HLL::Grammar {
         <sym> <.ws> <varname> [ <.ws> ':=' <.ws> <EXPR> ]? <semicolon>
     }
 
+    token param { <varname> }
+    token statement:sym<sub> {
+        <sym> <.ws> <subbody>
+    }
+
+    rule subbody {
+        :my $*CUR_BLOCK   := QAST::Block.new(QAST::Stmts.new());
+
+        <ident> <.ws> 
+            '(' ~ ')' [ <.ws> <param>* % [ <.ws> ',' <.ws> ] <.ws> ] <.ws>
+            '{' ~ '}' <statementlist>
+    } 
+
     token statement:sym<say> {
         <sym> <.ws> <EXPR> <semicolon>
     }
@@ -82,6 +95,8 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     token term:sym<value>    { <value> }
     token term:sym<variable> { <varname> }
 
+    token term:sym<call>     { <ident> '(' ~ ')' [ <EXPR>* % ',' ] }
+
     proto token value {*}
     token value:sym<string> { <?["]> <quote_EXPR: ':q', ':b'> }
     token value:sym<integer> { '-'? \d+ }
@@ -128,7 +143,38 @@ class Wulfenite::Actions is HLL::Actions {
 	    $var,
 	    $<EXPR> ?? $<EXPR>.ast !! QAST::SVal.new(:value(""))
         );
-}
+    }
+
+    method statement:sym<sub>($/) {
+        $*CUR_BLOCK[0].push(QAST::Op.new(
+            :op('bind'),
+            QAST::Var.new( :name(~$<ident>), :scope('lexical'), :decl('var') ),
+            $<subbody>.ast
+        ));
+        make QAST::Op.new( :op('null') );
+    }
+
+    method subbody($/) {
+        $*CUR_BLOCK.name(~$<ident>);
+        $*CUR_BLOCK.push($<statementlist>.ast);
+        
+        make $*CUR_BLOCK;
+    }
+        
+    method param($/) {
+        $*CUR_BLOCK[0].push(QAST::Var.new(
+            :name(~$<varname>), :scope('lexical'), :decl('param')
+        ));
+        $*CUR_BLOCK.symbol(~$<varname>, :declared(1));
+    }
+
+    method term:sym<call>($/) {
+        my $call := QAST::Op.new( :op('call'), :name(~$<ident>) );
+        for $<EXPR> {
+            $call.push($_.ast);
+        }
+        make $call;
+    }
 
     method statement:sym<say>($/) {
         make QAST::Op.new(
