@@ -12,7 +12,7 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     }
 
     rule statementlist {
-        [ <.ws> <statement> <.ws> ]*
+        [ <statement> ]*
     }
 
     rule block {
@@ -24,7 +24,7 @@ grammar Wulfenite::Grammar is HLL::Grammar {
         '{' ~ '}' <statementlist>
     }
 
-    token semicolon { <.ws> [ ';' || $ ] }
+    token semicolon { [ ';' || $ ] }
  
     proto token statement {*}
     token statement:sym<EXPR> {
@@ -32,20 +32,20 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     }
 
     token statement:sym<my> {
-        <sym> <.ws> <varname> [ <.ws> ':=' <.ws> <EXPR> ]? <semicolon>
+        :s <sym> <varname> [ ':=' <EXPR> ]? <semicolon>
     }
 
     token param { <varname> }
-    token statement:sym<sub> {
-        <sym> <.ws> <subbody>
+    token statement:sym<sub> { :s
+        :s <sym> <subbody>
     }
 
-    rule subbody {
+    rule subbody { 
         :my $*CUR_BLOCK   := QAST::Block.new(QAST::Stmts.new());
         :my $*IN_SUB      := 1;
 
-        <ident> <.ws> 
-            '(' ~ ')' [ <.ws> <param>* % [ <.ws> ',' <.ws> ] <.ws> ] <.ws>
+        :s <ident> 
+            '(' ~ ')' [ <param>* % [ ',' ] ] 
             '{' ~ '}' <statementlist>
     } 
 
@@ -54,11 +54,11 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     }
 
     token statement:sym<if> {
-        <sym> <.ws> <EXPR> <.ws> <block>
+        :s <sym> <EXPR> <block>
     }
 
     token statement:sym<while> {
-        <sym> <.ws> <EXPR> <.ws> <block>
+        :s <sym> <EXPR> <block>
     }
 
     # Simple expressions
@@ -96,8 +96,12 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     token term:sym<value>    { <value> }
     token term:sym<variable> { <varname> }
 
-    token term:sym<return>   { :s <?{$*IN_SUB}> <sym> [ '(' ~ ')' [ <EXPR>? ] ] }
-    token term:sym<call>     { :s <ident> [ '(' ~ ')' [ <EXPR>* % ',' ] ] }
+    token term:sym<return>   { :s <?{$*IN_SUB}> <sym> <EXPR>? }
+    token term:sym<call>     { 
+        :s <ident> [
+            [ <EXPR>* % ',' ] | [ '(' ~ ')' [ <EXPR>* % ',' ]]
+        ]
+    }
 
     proto token value {*}
     token value:sym<string> { <?["]> <quote_EXPR: ':q', ':b'> }
@@ -106,7 +110,9 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     # Names et al
     token keyword { [ if | my | return | sub | while ] <!ww> }
     token varname { '$' <[A..Za..z_]> <[A..Za..z0..9_]>* }
-    token ident   { <!keyword> <[A..Za..z_]> <[A..Za..z0..9_]>* }
+    token ident   { 
+        [ <keyword> <.panic("keyword used as identifier")> ]?
+        <[A..Za..z_]> <[A..Za..z0..9_]>* }
 }
 
 class Wulfenite::Actions is HLL::Actions {
