@@ -130,6 +130,27 @@ class Wulfenite::Actions is HLL::Actions {
         make QAST::Var.new( :name($name), :scope('lexical') );
     }
 
+    method term:sym<closure>($/) {
+        $*CUR_BLOCK.name(~$<ident>);
+        $*CUR_BLOCK.push(
+            QAST::Op.new(
+                :op('lexotic'), :name<RETURN>,
+                $<statementlist>.ast
+            )
+        );
+
+        make QAST::Op.new( :op('takeclosure'), $*CUR_BLOCK );
+    }
+
+    method term:sym<apply>($/) { 
+        my $call := QAST::Op.new( :op('call'), $<closure>.ast );
+        for $<EXPR> {
+            $call.push($_.ast);
+        }
+
+        make $call;
+    }
+
     method value:sym<string>($/) {
         make $<quote_EXPR>.ast;
     }
@@ -141,4 +162,5 @@ class Wulfenite::Actions is HLL::Actions {
     }
 
     method circumfix:sym<( )>($/) { make $<EXPR>.ast }
+
 }

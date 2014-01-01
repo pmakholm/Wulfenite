@@ -96,6 +96,19 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     token term:sym<value>    { <value> }
     token term:sym<variable> { <varname> }
 
+    token lambda { '->' | 'lambda' }
+    token term:sym<closure> {
+        :my $*CUR_BLOCK   := QAST::Block.new(QAST::Stmts.new());
+        :my $*IN_SUB      := 1;
+
+        :s <lambda> [ <param>* % ',' ] '{' ~ '}' <statementlist>
+    }
+
+    token apply { '@' | 'apply' }
+    token term:sym<apply> {
+        :s <apply> <closure=.EXPR> '(' ~ ')' [ <EXPR>* % ',' ]
+    }
+
     token term:sym<return>   { :s <?{$*IN_SUB}> <sym> <EXPR>? }
     token term:sym<call>     { 
         :s <ident> [
@@ -108,7 +121,7 @@ grammar Wulfenite::Grammar is HLL::Grammar {
     token value:sym<integer> { '-'? \d+ }
 
     # Names et al
-    token keyword { [ if | my | return | sub | while ] <!ww> }
+    token keyword { [ apply | lambda | if | my | return | sub | while ] <!ww> }
     token varname { '$' <[A..Za..z_]> <[A..Za..z0..9_]>* }
     token ident   { 
         [ <keyword> <.panic("keyword used as identifier")> ]?
