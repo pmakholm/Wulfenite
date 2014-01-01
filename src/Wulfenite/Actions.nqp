@@ -44,7 +44,7 @@ class Wulfenite::Actions is HLL::Actions {
     method statement:sym<sub>($/) {
         $*CUR_BLOCK[0].push(QAST::Op.new(
             :op('bind'),
-            QAST::Var.new( :name(~$<ident>), :scope('lexical'), :decl('var') ),
+            QAST::Var.new( :name(~$<subbody><ident>), :scope('lexical'), :decl('var') ),
             $<subbody>.ast
         ));
         make QAST::Op.new( :op('null') );
