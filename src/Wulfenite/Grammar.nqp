@@ -4,7 +4,8 @@ use NQPHLL;
 
 grammar Wulfenite::Grammar is HLL::Grammar {
     token TOP {
-        :my $*CUR_BLOCK := QAST::Block.new(QAST::Stmts.new());
+        :my $*MAIN      := QAST::Block.new(QAST::Stmts.new());
+        :my $*CUR_BLOCK := $*MAIN;
         :my $*IN_SUB    := 0;
 
         <statementlist>
@@ -59,6 +60,10 @@ grammar Wulfenite::Grammar is HLL::Grammar {
 
     token statement:sym<while> {
         :s <sym> <EXPR> <block>
+    }
+
+    token statement:sym<load> {
+        :s <sym> <?["]> <quote_EXPR: ':q', ':b'> <semicolon>
     }
 
     # Simple expressions

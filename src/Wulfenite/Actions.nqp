@@ -123,6 +123,22 @@ class Wulfenite::Actions is HLL::Actions {
         );
     }
 
+    method statement:sym<load>($/) {
+	my $file := $<quote_EXPR>.ast.value;
+
+        my $fh := nqp::open($file, 'r');
+        $fh.encoding('utf8');
+        my $source := $fh.readall();
+        $fh.close();
+
+        my $ast := nqp::getcomp('wulfenite').compile(
+            $source, :target('ast'), :compunit_ok
+        );
+
+        $*MAIN[0].push($ast[0]);
+        make $ast[1];
+    }
+
     method term:sym<value>($/) { make $<value>.ast; }
     method term:sym<variable>($/) { 
         my $name := ~$<varname>;
